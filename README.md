@@ -25,7 +25,7 @@ sudo pacman -Sy curl grep seq htmlq perl fzf mpv --no-confirm
 ---
 ### 🚀 Instalación
 ```bash
-wget -q https://raw.githubusercontent.com/jirentorres/oveja/refs/heads/master/oveja
+wget -q https://raw.githubusercontent.com/jirentorres/oveja/refs/heads/main/oveja
 chmod +x oveja
 #Recuerda colocar ~/.local/bin en tu PATH
 mv oveja ~/.local/bin
