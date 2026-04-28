@@ -24,9 +24,39 @@ sudo pacman -Sy curl grep seq htmlq perl fzf mpv --no-confirm
 ```
 ---
 ### 🚀 Instalación
+
+**Linux**
+
 ```bash
 wget -q https://raw.githubusercontent.com/jirentorres/oveja/refs/heads/main/oveja
 chmod +x oveja
 #Recuerda colocar ~/.local/bin en tu PATH
 mv oveja ~/.local/bin
 ```
+
+**Android**
+1. Instala [Termux](https://termux.com/)
+2. Instala [MPV](https://f-droid.org/en/packages/is.xyz.mpv/) o [VLC](https://f-droid.org/en/packages/org.videolan.vlc/)
+3. Instala las dependencias
+```bash
+pkg update -y && pkg upgrade -y
+pkg install rust curl wget grep seq wget perl fzf -y
+cargo install htmlq
+```
+4. Descarga y ejecuta el script
+```bash
+wget -q https://raw.githubusercontent.com/jirentorres/oveja/refs/heads/main/oveja-android
+bash oveja-android
+```
+> Cabe considerar que algunos links pueden no abrir debido a falta de Headers, ya que mpv y vlc requieren root para estos, aunque estoy trabajando en ver si puedo solventar esto con otra opcion.
+5. (Opcional) Agregar shortcut
+
+Termux permite agregar shortcuts. Para esto deberas instalar [Termux-Widget](https://github.com/termux/termux-widget).
+```bash
+#Crear carpeta .shortcuts
+mkdir -p /data/data/com.termux/files/home/.shortcuts
+chmod 700 -R /data/data/com.termux/files/home/.shortcuts
+#Crear shortcut de oveja, cambiar el PATH a donde tengas oveja-android instalado
+echo -e "#!/bin/bash\nbash PATH/TO/OVEJA/SCRIPT/oveja-android" > /data/data/com.termux/files/home/.shortcuts/oveja-androd
+```
+Una vez agregado el shortcut, regresa a tu Home en tu dispositivo, agrega un nuevo widget, selecciona termux y te debera aparece un widget llamado **shortcut**. Al agregarlo a la pantalla de inicio elige **oveja-android** y listo.
