@@ -18,9 +18,9 @@
 
 ```bash
 #Debian, Ubuntu, Mint
-sudo apt install curl grep seq htmlq perl fzf mpv -y
+sudo apt install curl grep seq htmlq perl fzf mpv yt-dlp -y
 #Arch Linux
-sudo pacman -Sy curl grep seq htmlq perl fzf mpv --no-confirm
+sudo pacman -Sy curl grep seq htmlq perl fzf mpv yt-dlp --no-confirm
 ```
 ---
 ### 🚀 Instalación
@@ -40,7 +40,7 @@ mv oveja ~/.local/bin
 3. Instala las dependencias
 ```bash
 pkg update -y && pkg upgrade -y
-pkg install rust curl wget grep seq wget perl fzf -y
+pkg install rust curl wget grep seq wget perl fzf yt-dlp -y
 cargo install htmlq
 ```
 4. Descarga y ejecuta el script
