@@ -37,6 +37,7 @@ oveja --version
 </details>
 
 <details> <summary>Android</summary>
+
 1. Instala [Termux](https://termux.com/)
 2. Instala [MPV](https://f-droid.org/en/packages/is.xyz.mpv/) o [VLC](https://f-droid.org/en/packages/org.videolan.vlc/)
 3. Instala las dependencias
