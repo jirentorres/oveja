@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-version_info="oveja 1.0.0"
+version_info="oveja 1.1.0"
 
 #Colors
 red='\e[1;31m'
@@ -10,7 +10,7 @@ def='\e[0m'
 #User-Agent, puedes cambiarlo si lo deseas
 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0"
 
-#Reproductor (testeados: mpv, vlc, ffplay)
+#Reproductor (PC: mpv, vlc, ffplay; Android: mpv-android, vlc-android)
 player="mpv"
 
 #Directorio de descargas
@@ -28,72 +28,65 @@ function help(){
 	exit 0
 }
 
-#Logs: anime/capitulo_visto
-function read_logs(){
-	anime_select=$(cat "$HOME/.config/oveja/logs.txt" | fzf --reverse --cycle --prompt "logs: ")
-	watch_anime "$anime_select"
-	exit 0
-}
-
 #Buscar anime
 function search_anime(){
 	frontend=$(echo -e "AnimeAV1\nJkAnime\nMonosChinos2\nAnimeFLV\nTioAnime" | fzf --reverse --cycle --prompt "Selecciona un Frontend: ")
 	case "$frontend" in
 		"AnimeAV1")
-			curl -s -A "$user_agent" "https://animeav1.com/catalogo?search=$1" -o/tmp/oveja/response; wait
-			cat /tmp/oveja/response | htmlq 'a.inset-0' -a href | awk '{print $NF}' FS='/' >/tmp/oveja/anime_name
-			if [[ $(< /tmp/oveja/response) =~ "page=" ]]; then
-				curl -s -A "$user_agent" "https://animeav1.com/catalogo?search=$1&page=2" | htmlq 'a.inset-0' -a href | awk '{print $NF}' FS='/' >>/tmp/oveja/anime_name
+			curl -s -A "$user_agent" "https://animeav1.com/catalogo?search=$1" -o ~/.cache/oveja/response; wait
+			cat ~/.cache/oveja/response | htmlq 'a.inset-0' -a href | awk '{print $NF}' FS='/' >~/.cache/oveja/anime_name
+			if [[ $(< ~/.cache/oveja/response) =~ "page=" ]]; then
+				curl -s -A "$user_agent" "https://animeav1.com/catalogo?search=$1&page=2" | htmlq 'a.inset-0' -a href | awk '{print $NF}' FS='/' >>~/.cache/oveja/anime_name
 			fi
-			anime_name=$(cat /tmp/oveja/anime_name | fzf --reverse --cycle --prompt "Selecciona un anime: ")
+			anime_name=$(cat ~/.cache/oveja/anime_name | fzf --reverse --cycle --prompt "Selecciona un anime: ")
 			anime_caps=$(curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name" | grep -oP 'episodesCount:\K\d+')
 			if [ $anime_caps -eq 0 ]; then
 				echo "${red}Este anime no tiene ningun capitulo publicado. Verifica en MyAnimeList o Anilist para cerciorarte de esto, o reportalo como falla en github.com/user/issues/${def}"; exit 2
         	fi
         	select_cap=$(seq 1 $anime_caps | fzf --reverse --cycle --prompt "Selecciona un capitulo: ")
-        	curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$select_cap/__data.json?x-sveltekit-invalidated=0001" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | nl -w1 -s ' ' > /tmp/oveja/mirror
-        	mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+        	curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$select_cap/__data.json?x-sveltekit-invalidated=0001" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | perl -pe 's/Unknown (?=.*zilla-networks)/HLS /; s/Unknown (?=.*pixeldrain)/PDrain /; s/Unknown (?=.*mega\.nz)/Mega /; s/Unknown (?=.*uns\.bio)/UPNShare /; s/Unknown (?=.*mp4upload)/MP4Upload /; s/Unknown (?=.*1fichier)/1Fichier /' | nl -w1 -s ' ' > ~/.cache/oveja/mirror
+        	mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
         	play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$select_cap" "$anime_caps" "$frontend"
         	exit 0
 		;;
     	"JkAnime")
         	anime_name=$(curl -s -A "$user_agent" "https://jkanime.net/buscar/$1" | htmlq 'div.anime__item' | htmlq a -a href | awk '!seen[$0]++' | awk '{print $4}' FS=/ | fzf --reverse --cycle --prompt "Selecciona un anime: ")
-        	curl -s -A "$user_agent" "https://jkanime.net/$anime_name" -o/tmp/oveja/response; wait
-        	anime_caps=$(cat /tmp/oveja/response | grep "Episodios:" -m1 | awk '{print $4}' FS='>' | awk '{print $1}' 'FS=<' | head -n1 | tr -d '[:space:]')
+        	curl -s -A "$user_agent" "https://jkanime.net/$anime_name" -o ~/.cache/oveja/response; wait
+        	anime_caps=$(cat ~/.cache/oveja/response | grep "Episodios:" -m1 | awk '{print $4}' FS='>' | awk '{print $1}' 'FS=<' | head -n1 | tr -d '[:space:]')
         	if [ $anime_caps -eq 0 ]; then
-        		anime_caps=$(cat /tmp/oveja/response | grep "Último" | htmlq a -t | awk '{print $4}')
+        		anime_caps=$(cat ~/.cache/oveja/response | grep "Último" | htmlq a -t | awk '{print $4}')
         		if [ $anime_caps -eq 0 ]; then
         			echo-e  "${red}Este anime no tiene ningun capitulo publicado. Verifica en MyAnimeList o Anilist para cerciorarte de esto, o reportalo como falla en github.com/user/issues/${def}"; exit 2
         		fi
         	fi
         	select_cap=$(seq 1 $anime_caps | fzf --reverse --cycle --prompt "Seleciona un capitulo: ")
-        	curl -s -A "$user_agent" "https://jkanime.net/$anime_name/$select_cap/" -o/tmp/oveja/response; wait
-        	cat /tmp/oveja/response | grep "var servers" | htmlq --text | sed 's/.$//; s/var servers = //' | jq -r '.[] | "\(.server) \(.remote | @base64d)"' | grep -v '^$' | nl -w 1 -s ' ' > /tmp/oveja/mirror
-        	mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+        	curl -s -A "$user_agent" "https://jkanime.net/$anime_name/$select_cap/" -o ~/.cache/oveja/response; wait
+        	cat ~/.cache/oveja/response | grep "var servers" | htmlq --text | sed 's/.$//; s/var servers = //' | jq -r '.[] | "\(.server) \(.remote | @base64d)"' | grep -v '^$' | nl -w 1 -s ' ' > ~/.cache/oveja/mirror
+        	mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 			#play_anime MIRROR LINK_MIRROR NOMBRE_ANIME CAPITULO_ANIME CAPITULOS_TOTALES FRONTEND
         	play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$select_cap" "$anime_caps" "$frontend"
         	exit 0
         ;;
     	"MonosChinos2")
-			curl -s -A "$user_agent" "https://monoschino2.com/directorio/anime?q=$1" -o/tmp/oveja/response; wait
-			cat /tmp/oveja/response | htmlq 'article' | htmlq a -a href | awk '{print "https://monoschino2.com/" $1}' >/tmp/oveja/anime_name
-			cat /tmp/oveja/response | htmlq 'img.skeleton' -a alt > /tmp/oveja/anime_list
-			if [[ $(< /tmp/oveja/response) =~ "p=2" ]]; then
-				curl -s -A "$user_agent" "https://monoschino2.com/directorio/anime?p=2&q=$1" -o/tmp/oveja/response; wait
-				cat /tmp/oveja/response | htmlq 'article' | htmlq a -a href | awk '{print "https://monoschino2.com/" $1}' >>/tmp/oveja/anime_name
-				cat /tmp/oveja/response | htmlq 'img.skeleton' -a alt >> /tmp/oveja/anime_list
+			curl -s -A "$user_agent" "https://monoschino2.com/directorio/anime?q=$1" -o ~/.cache/oveja/response; wait
+			cat ~/.cache/oveja/response | htmlq 'article' | htmlq a -a href | awk '{print "https://monoschino2.com/" $1}' >~/.cache/oveja/anime_name
+			cat ~/.cache/oveja/response | htmlq 'img.skeleton' -a alt > ~/.cache/oveja/anime_list
+			if [[ $(< ~/.cache/oveja/response) =~ "p=2" ]]; then
+				curl -s -A "$user_agent" "https://monoschino2.com/directorio/anime?p=2&q=$1" -o ~/.cache/oveja/response; wait
+				cat ~/.cache/oveja/response | htmlq 'article' | htmlq a -a href | awk '{print "https://monoschino2.com/" $1}' >>~/.cache/oveja/anime_name
+				cat ~/.cache/oveja/response | htmlq 'img.skeleton' -a alt >> ~/.cache/oveja/anime_list
 			fi
-			anime_name=$(cat /tmp/oveja/anime_list | nl -w 1 | fzf --reverse --cycle --prompt "Selecciona un anime: ")
-			anime_link=$(sed -n "$(echo "$anime_name" | cut -f1)p" /tmp/oveja/anime_name)
+			anime_name=$(cat ~/.cache/oveja/anime_list | nl -w 1 | fzf --reverse --cycle --prompt "Selecciona un anime: ")
+			anime_link=$(sed -n "$(echo "$anime_name" | cut -f1)p" ~/.cache/oveja/anime_name)
 			anime_caps=$(curl -s -A "$user_agent" "$anime_link" | htmlq 'button.mt-2' -t | tail -n1 | awk '{print $NF}')
 			if [ $anime_caps -eq 0 ]; then
 				echo -e "${red}Este anime no tiene ningun capitulo publicado. Verifica en MyAnimeList o Anilist para cerciorarte de esto, o reportalo como falla en github.com/user/issues/${def}"; exit 2
 			fi
 			anime_name="${anime_link##*/}"
 			select_cap=$(seq 1 $anime_caps | fzf --reverse --cycle --prompt "Selecciona un capitulo: ")
-			curl -s -A "$user_agent" "https://monoschino2.com/ver/${anime_name}-${select_cap}" -o/tmp/oveja/response; wait
-			paste <(cat /tmp/oveja/response | grep 'span class="icon' -A1 | grep "<span>" | htmlq -t | sed 's/\ //g' | grep -v "^$") <(cat /tmp/oveja/response | grep 'tabsArray\[' | awk '{print $10}' FS="'" | grep -v '^$' | awk '{print "https" $NF}' FS='https') -d ' ' > /tmp/oveja/mirror
-			mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+			curl -s -A "$user_agent" "https://monoschino2.com/ver/${anime_name}-${select_cap}" -o ~/.cache/oveja/response; wait
+			paste <(cat ~/.cache/oveja/response | grep 'span class="icon' -A1 | grep "<span>" | htmlq -t | sed 's/\ //g' | grep -v "^$") <(cat ~/.cache/oveja/response | grep 'tabsArray\[' | awk '{print $10}' FS="'" | grep -v '^$' | awk '{print "https" $NF}' FS='https') -d ' ' > ~/.cache/oveja/mirror
+			mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 			play_anime "$(echo $mirror | awk '{print $1}')" "$(echo $mirror | awk '{print $2}')" "$anime_name" "$select_cap" "$anime_caps" "$frontend"
 			exit 0
     	;;
@@ -104,8 +97,8 @@ function search_anime(){
 				echo -e "${red}Este anime no tiene ningun capitulo publicado. Verifica en MyAnimeList o Anilist para cerciorarte de esto, o reportalo como falla en github.com/user/issues/${def}"; exit 2
 			fi
 			select_cap=$(seq 1 $anime_caps | fzf --reverse --cycle --prompt "Selecciona un capitulo: ")
-			curl -s -A "$user_agent" "https://www4.animeflv.net/ver/${anime_name}-${select_cap}" | grep "var videos = {" | sed 's/        var videos = //; s/..$//' | jq -r '.SUB[] | "\(.title)\t\(.code)"' | nl -w1 -s ' ' > /tmp/oveja/mirror
-			mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Seleccione un mirror: ")
+			curl -s -A "$user_agent" "https://www4.animeflv.net/ver/${anime_name}-${select_cap}" | grep "var videos = {" | sed 's/        var videos = //; s/..$//' | jq -r '.SUB[] | "\(.title)\t\(.code)"' | nl -w1 -s ' ' > ~/.cache/oveja/mirror
+			mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Seleccione un mirror: ")
 			play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$select_cap" "$anime_caps" "$frontend"
 			exit 0
         ;;
@@ -119,8 +112,8 @@ function search_anime(){
     			echo "${red}Este anime no tiene ningun capitulo publicado. Verifica en MyAnimeList o Anilist para cerciorarte de esto, o reportalo como falla en github.com/user/issues/${def}"; exit 2
     		fi
     		select_cap=$(seq 1 $anime_caps | fzf --reverse --cycle --prompt "Seleccione un capitulo: ")
-    		curl -s -A "$user_agent" "https://tioanime.com/ver/${anime_name}-${select_cap}" | grep "var videos" | sed 's/    var videos = //; s/..$//' | jq -r '.[] | "\(.[0]) \(.[1])"' | nl -w 1 -s ' ' > /tmp/oveja/mirror
-    		mirror=$(cat /tmp/oveja/mirror| fzf --reverse --cycle --prompt "Seleccione un mirror: ")
+    		curl -s -A "$user_agent" "https://tioanime.com/ver/${anime_name}-${select_cap}" | grep "var videos" | sed 's/    var videos = //; s/..$//' | jq -r '.[] | "\(.[0]) \(.[1])"' | nl -w 1 -s ' ' > ~/.cache/oveja/mirror
+    		mirror=$(cat ~/.cache/oveja/mirror| fzf --reverse --cycle --prompt "Seleccione un mirror: ")
     		play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$select_cap" "$anime_caps" "$frontend"
     		exit 0
         ;;
@@ -150,6 +143,12 @@ function play_anime(){
     			"ffplay")
     				ffplay -headers "User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
     			;;
+    			"mpv-android")
+    				bash ~/.config/oveja/mpv-play.sh "$index_link" &
+    			;;
+    			"vlc-android")
+    				bash ~/.config/oveja/vlc-play.sh "$index_link" &
+    			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
     			;;
@@ -166,9 +165,9 @@ function play_anime(){
 			exit 0
 		;;
 		"Streamwish" | "SW")
-			curl -s -A "$user_agent" "$2" -I >/tmp/oveja/response; wait
-			redirect_link=$(cat /tmp/oveja/response | grep 'location' | awk '{print $2}' | sed 's/\r//')
-			referer=$(cat /tmp/oveja/response | grep "location" | awk '{print $NF}' | awk '{print $1}' FS="embed" | awk '{print $1}' FS="e/")
+			curl -s -A "$user_agent" "$2" -I >~/.cache/oveja/response; wait
+			redirect_link=$(cat ~/.cache/oveja/response | grep 'location' | awk '{print $2}' | sed 's/\r//')
+			referer=$(cat ~/.cache/oveja/response | grep "location" | awk '{print $NF}' | awk '{print $1}' FS="embed" | awk '{print $1}' FS="e/")
 			master_link=$(curl -s -H "Referer: https://streamwish.to" -H "User-Agent: $user_agent" "$redirect_link" | grep "eval" | htmlq script -t | grep -v '^$' | js-beautify | grep "master.m3u8" | awk '{print $4}' FS='"' | sed 's/master.m3u8\//master.m3u8/' | grep "^http")
 			index=$(curl -s -H "Referer: $referer" -H "User-Agent: $user_agent" "$master_link" | awk NR==3)
 			base="${master_link%master.m3u8*}"
@@ -187,6 +186,9 @@ function play_anime(){
     			"ffplay")
     				ffplay -headers "Referer: $referer"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
     			;;
+    			"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
+    			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
     			;;
@@ -203,9 +205,9 @@ function play_anime(){
 			exit 4
 		;;
 		"Vidhide")
-			curl -s -A "$user_agent" "$2" -I >/tmp/oveja/response; wait
-			redirect_link=$(cat /tmp/oveja/response | grep 'location' | awk '{print $2}' | sed 's/\r//')
-			referer=$(cat /tmp/oveja/response | grep "location" | awk '{print $NF}' | awk '{print $1}' FS="embed" | awk '{print $1}' FS="e/")
+			curl -s -A "$user_agent" "$2" -I >~/.cache/oveja/response; wait
+			redirect_link=$(cat ~/.cache/oveja/response | grep 'location' | awk '{print $2}' | sed 's/\r//')
+			referer=$(cat ~/.cache/oveja/response | grep "location" | awk '{print $NF}' | awk '{print $1}' FS="embed" | awk '{print $1}' FS="e/")
 			master_link=$(curl -s "$redirect_link" -A "$user_agent" | grep "master" | js-beautify | grep "master.txt" | awk '{print $4}' FS='"')
 			index=$(curl -s -H "Referer: $referer" -H "User-Agent: $user_agent" "$master_link" | awk NR==3)
 			base="${master_link%master*}"
@@ -224,6 +226,9 @@ function play_anime(){
     			"ffplay")
     				ffplay -headers "Referer: $referer"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
     			;;
+    			"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
+    			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
     			;;
@@ -233,9 +238,9 @@ function play_anime(){
 			exit 0
 		;;
 		"Mixdrop")
-			curl -s -A "$user_agent" "$2" -I >/tmp/oveja/response; wait
-			redirect_link=$(cat /tmp/oveja/response | grep 'location' | awk '{print $2}' | sed 's/\r//')
-			referer=$(cat /tmp/oveja/response | grep "location" | awk '{print $NF}' | awk '{print $1}' FS="embed" | awk '{print $1}' FS="e/")
+			curl -s -A "$user_agent" "$2" -I >~/.cache/oveja/response; wait
+			redirect_link=$(cat ~/.cache/oveja/response | grep 'location' | awk '{print $2}' | sed 's/\r//')
+			referer=$(cat ~/.cache/oveja/response | grep "location" | awk '{print $NF}' | awk '{print $1}' FS="embed" | awk '{print $1}' FS="e/")
 			index_link=$(curl -s -A "$user_agent" "$redirect_link" | htmlq script -t | grep "eval" | js-beautify | grep wurl | awk '{print "https:" $2}' FS='"')
 			if [ "$index_link" == "" ]; then
 				echo -e "${red}404! El link esta caido, prueba otro mirror/frontend${def}"; sleep 2
@@ -250,6 +255,9 @@ function play_anime(){
         		;;
     			"ffplay")
     				ffplay -headers "Referer: $referer"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
+    			;;
+    			"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
     			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
@@ -274,6 +282,9 @@ function play_anime(){
         		;;
     			"ffplay")
     				ffplay -headers "Referer: https://www.mp4upload.com/"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
+    			;;
+    			"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
     			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
@@ -300,6 +311,9 @@ function play_anime(){
     			"ffplay")
     				ffplay -headers "Referer: https://streamtape.com/"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
     			;;
+    			"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
+    			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
     			;;
@@ -310,9 +324,9 @@ function play_anime(){
 		;;
 		"Doodstream")
 			echo -e "${red}Actualmente estoy trabajando en esta opcion...${def}"; exit 2
-		#	curl -s -A "$user_agent" "$2" -I >/tmp/oveja/response; wait
-		#	redirect_link=$(cat /tmp/oveja/response | grep 'location' | awk '{print $2}' | sed 's/\r//')
-		#	referer=$(cat /tmp/oveja/response | grep "location" | awk '{print $NF}' | awk '{print $1}' FS="embed" | awk '{print $1}' FS="e/")
+		#	curl -s -A "$user_agent" "$2" -I >~/.cache/oveja/response; wait
+		#	redirect_link=$(cat ~/.cache/oveja/response | grep 'location' | awk '{print $2}' | sed 's/\r//')
+		#	referer=$(cat ~/.cache/oveja/response | grep "location" | awk '{print $NF}' | awk '{print $1}' FS="embed" | awk '{print $1}' FS="e/")
 		;;
 		"PremiunVIP")
 			face_id="${2##*=}"
@@ -331,6 +345,12 @@ function play_anime(){
         		;;
     			"ffplay")
     				ffplay -headers "User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
+    			;;
+    			"mpv-android")
+    				bash ~/.config/oveja/mpv-play.sh "$index_link" &
+    			;;
+    			"vlc-android")
+    				bash ~/.config/oveja/vlc-play.sh "$index_link" &
     			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
@@ -356,6 +376,9 @@ function play_anime(){
         		;;
     			"ffplay")
     				ffplay -headers "Referer: https://re.ironhentai.com"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
+    			;;
+    			"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
     			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
@@ -384,6 +407,9 @@ function play_anime(){
     			"ffplay")
     				ffplay -headers "Referer: $referer"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
     			;;
+    			"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
+    			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
     			;;
@@ -407,6 +433,9 @@ function play_anime(){
         		;;
     			"ffplay")
     				ffplay -headers "Referer: https://www.yourupload.com/"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
+    			;;
+    			"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
     			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
@@ -436,6 +465,12 @@ function play_anime(){
     			"ffplay")
     				ffplay -headers "User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
     			;;
+    			"mpv-android")
+    				bash ~/.config/oveja/mpv-play.sh "$index_link" &
+    			;;
+    			"vlc-android")
+    				bash ~/.config/oveja/vlc-play.sh "$index_link" &
+    			;;
     			*)
     				echo -e "${red}$play no esta soportado${def}"; exit 4
     			;;
@@ -443,6 +478,26 @@ function play_anime(){
 			echo -e "${bold}Reproduciendo...${def}"; sleep 1.2
 			anime_options "$1" "$2" "$3" "$4" "$5" "$6" "$index_link"
 			exit 0
+		;;
+		"PDrain")
+			index_link=$(echo "$2" | awk -F'[/?]' '{print "https://pixeldrain.com/api/file/" }')
+			case "$player" in
+				"mpv")
+					mpv --http-header-fields="Referer: $2" --user-agent="$user_agent" "$index_link" &>/dev/null &
+				;;
+				"vlc")
+					vlc --http-referer="$2" --http-user-agent="$user_agent" "$index_link" &>/dev/null &
+				;;
+				"ffplay")
+					ffplay -headers "Referer: $2"$'\r\n'"User-Agent: $user_agent"$'\r\n' "$index_link" &>/dev/null &
+				;;
+				"mpv-android" | "vlc-android")
+    				echo -e "${red}$1 no esta soportado en android${def}"; exit 4
+    			;;
+				*)
+					echo -e "${reed}$play no esta soportado${def}"; exit 4
+				;;
+			esac
 		;;
 		"UPNShare" | "1Fichier")
 			echo -e "${bold}UPNShare/1Fichier${def} no esta soportado para descarga directa ni reproduccion directa, debes descargarlo/verlo desde su propia pagina.\nDeseas abrir tu Browser por defecto con este link? -> ${bold}$2${def}"
@@ -484,8 +539,8 @@ function anime_options(){
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"MonosChinos2")
-					curl -s -A "$user_agent" "https://monoschino2.com/ver/${anime_name}-${next_cap}" -o/tmp/oveja/response; wait
-					mirror=$(paste <(cat /tmp/oveja/response | grep 'span class="icon' -A1 | grep "<span>" | htmlq -t | sed 's/\ //g' | grep -v "^$") <(cat /tmp/oveja/response | grep 'tabsArray\[' | awk '{print $10}' FS="'" | grep -v '^$' | awk '{print "https" $NF}' FS='https') -d ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					curl -s -A "$user_agent" "https://monoschino2.com/ver/${anime_name}-${next_cap}" -o ~/.cache/oveja/response; wait
+					mirror=$(paste <(cat ~/.cache/oveja/response | grep 'span class="icon' -A1 | grep "<span>" | htmlq -t | sed 's/\ //g' | grep -v "^$") <(cat ~/.cache/oveja/response | grep 'tabsArray\[' | awk '{print $10}' FS="'" | grep -v '^$' | awk '{print "https" $NF}' FS='https') -d ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $1}')" "$(echo $mirror | awk '{print $2}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"AnimeFLV")
@@ -511,8 +566,8 @@ function anime_options(){
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"MonosChinos2")
-					curl -s -A "$user_agent" "https://monoschino2.com/ver/${anime_name}-${next_cap}" -o/tmp/oveja/response; wait
-					mirror=$(paste <(cat /tmp/oveja/response | grep 'span class="icon' -A1 | grep "<span>" | htmlq -t | sed 's/\ //g' | grep -v "^$") <(cat /tmp/oveja/response | grep 'tabsArray\[' | awk '{print $10}' FS="'" | grep -v '^$' | awk '{print "https" $NF}' FS='https') -d ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					curl -s -A "$user_agent" "https://monoschino2.com/ver/${anime_name}-${next_cap}" -o ~/.cache/oveja/response; wait
+					mirror=$(paste <(cat ~/.cache/oveja/response | grep 'span class="icon' -A1 | grep "<span>" | htmlq -t | sed 's/\ //g' | grep -v "^$") <(cat ~/.cache/oveja/response | grep 'tabsArray\[' | awk '{print $10}' FS="'" | grep -v '^$' | awk '{print "https" $NF}' FS='https') -d ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $1}')" "$(echo $mirror | awk '{print $2}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"AnimeFLV")
@@ -538,8 +593,8 @@ function anime_options(){
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"MonosChinos2")
-					curl -s -A "$user_agent" "https://monoschino2.com/ver/${anime_name}-${next_cap}" -o/tmp/oveja/response; wait
-					mirror=$(paste <(cat /tmp/oveja/response | grep 'span class="icon' -A1 | grep "<span>" | htmlq -t | sed 's/\ //g' | grep -v "^$") <(cat /tmp/oveja/response | grep 'tabsArray\[' | awk '{print $10}' FS="'" | grep -v '^$' | awk '{print "https" $NF}' FS='https') -d ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					curl -s -A "$user_agent" "https://monoschino2.com/ver/${anime_name}-${next_cap}" -o ~/.cache/oveja/response; wait
+					mirror=$(paste <(cat ~/.cache/oveja/response | grep 'span class="icon' -A1 | grep "<span>" | htmlq -t | sed 's/\ //g' | grep -v "^$") <(cat ~/.cache/oveja/response | grep 'tabsArray\[' | awk '{print $10}' FS="'" | grep -v '^$' | awk '{print "https" $NF}' FS='https') -d ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $1}')" "$(echo $mirror | awk '{print $2}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"AnimeFLV")
@@ -555,23 +610,23 @@ function anime_options(){
 		"change_mirror")
 			case "$6" in
 				"JkAnime")
-					mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$3" "$next_cap" "$5" "$6"
 				;;
 				"AnimeAV1")
-					mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"MonosChinos2")
-					mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $1}')" "$(echo $mirror | awk '{print $2}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"AnimeFLV")
-					mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"TioAnime")
-					mirror=$(cat /tmp/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 			esac
@@ -623,8 +678,17 @@ while getopts ":-:clhv" opt; do
 done
 
 function main(){
-	if [ ! -d /tmp/oveja/ ]; then mkdir /tmp/oveja/ &>/dev/null; fi
-	if [ ! -d $HOME/.config/oveja/ ]; then mkdir $HOME/.config/oveja/ &>/dev/null; fi
+	if [ ! -d ~/.cache/oveja/ ]; then mkdir -p ~/.cache/oveja/ &>/dev/null; fi
+	if [ ! -d $HOME/.config/oveja/ ]; then mkdir -p $HOME/.config/oveja/ &>/dev/null; fi
+	: $(uname -o)
+	if [[ $_ == "Android" ]]; then
+		if [ ! -f $HOME/.config/oveja/mpv-play.sh ]; then
+			echo -e "#!/bin/bash\nam start -n is.xyz.mpv/is.xyz.mpv.MPVActivity -e filepath \"\$1\"" > $HOME/.config/oveja/mpv-play.sh
+		fi
+		if [ ! -f $HOME/.config/oveja/vlc-play.sh ]; then
+			echo -e "#!/bin/bash\nam start -n org.videolan.vlc/org.videolan.vlc.gui.video.VideoPlayerActivity -a android.intent.action.VIEW -d \"\$1\"" > $HOME/.config/oveja/vlc-play.sh
+		fi
+	fi
 	echo -e "${bold}Mee... 🐑${def}"
 	echo -ne "${bold}Buscar anime: ${def}"; read raw_text
 	text_query=$(echo -n "$raw_text" | perl -pe 's/([^a-zA-Z0-9\Q.-_\E])/sprintf("%%%02X", ord($1))/ge')
