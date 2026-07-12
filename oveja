@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-version_info="oveja 1.1.0"
+version_info="oveja 1.2.0"
 
 #Colors
 red='\e[1;31m'
@@ -14,7 +14,7 @@ user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 F
 player="mpv"
 
 #Directorio de descargas
-dir_descargas="$HOME"
+dir_descargas="$HOME/Downloads"
 
 trap ctrl_c INT; function ctrl_c(){ exit 3; }
 
@@ -30,7 +30,8 @@ function help(){
 
 #Buscar anime
 function search_anime(){
-	frontend=$(echo -e "AnimeAV1\nJkAnime\nMonosChinos2\nAnimeFLV\nTioAnime" | fzf --reverse --cycle --prompt "Selecciona un Frontend: ")
+#removi animeflv hasta que vuelva a estar operativo
+	frontend=$(echo -e "AnimeAV1\nJkAnime\nMonosChinos2\nTioAnime" | fzf --reverse --cycle --prompt "Selecciona un Frontend: ")
 	case "$frontend" in
 		"AnimeAV1")
 			curl -s -A "$user_agent" "https://animeav1.com/catalogo?search=$1" -o ~/.cache/oveja/response; wait
@@ -44,7 +45,7 @@ function search_anime(){
 				echo "${red}Este anime no tiene ningun capitulo publicado. Verifica en MyAnimeList o Anilist para cerciorarte de esto, o reportalo como falla en github.com/user/issues/${def}"; exit 2
         	fi
         	select_cap=$(seq 1 $anime_caps | fzf --reverse --cycle --prompt "Selecciona un capitulo: ")
-        	curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$select_cap/__data.json?x-sveltekit-invalidated=0001" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | perl -pe 's/Unknown (?=.*zilla-networks)/HLS /; s/Unknown (?=.*pixeldrain)/PDrain /; s/Unknown (?=.*mega\.nz)/Mega /; s/Unknown (?=.*uns\.bio)/UPNShare /; s/Unknown (?=.*mp4upload)/MP4Upload /; s/Unknown (?=.*1fichier)/1Fichier /' | nl -w1 -s ' ' > ~/.cache/oveja/mirror
+        	curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$select_cap/__data.json" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | perl -pe 's/Unknown (?=.*zilla-networks)/HLS /; s/Unknown (?=.*pixeldrain)/PDrain /; s/Unknown (?=.*mega\.nz)/Mega /; s/Unknown (?=.*uns\.bio)/UPNShare /; s/Unknown (?=.*mp4upload)/MP4Upload /; s/Unknown (?=.*1fichier)/1Fichier /' | sed '1d' | nl -w1 -s ' ' > ~/.cache/oveja/mirror
         	mirror=$(cat ~/.cache/oveja/mirror | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
         	play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$select_cap" "$anime_caps" "$frontend"
         	exit 0
@@ -535,7 +536,7 @@ function anime_options(){
 					exit 0
 				;;
 				"AnimeAV1")
-					mirror=$(curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$next_cap/__data.json?x-sveltekit-invalidated=0001" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | nl -w1 -s ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					mirror=$(curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$next_cap/__data.json" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | sed '1d' | nl -w1 -s ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"MonosChinos2")
@@ -562,7 +563,7 @@ function anime_options(){
         			exit 0
 				;;
 				"AnimeAV1")
-					mirror=$(curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$next_cap/__data.json?x-sveltekit-invalidated=0001" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | nl -w1 -s ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					mirror=$(curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$next_cap/__data.json" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | sed '1d' | nl -w1 -s ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"MonosChinos2")
@@ -589,7 +590,7 @@ function anime_options(){
         			exit 0
 				;;
 				"AnimeAV1")
-					mirror=$(curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$next_cap/__data.json?x-sveltekit-invalidated=0001" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | nl -w1 -s ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
+					mirror=$(curl -s -A "$user_agent" "https://animeav1.com/media/$anime_name/$next_cap/__data.json" | jq -r '.. | strings' | awk '/^http/ {print (s?s:"Unknown"), $0; s=""} !/^http/ {s=$0}' | sed '1d' | nl -w1 -s ' ' | fzf --reverse --cycle --prompt "Selecciona un mirror: ")
 					play_anime "$(echo $mirror | awk '{print $2}')" "$(echo $mirror | awk '{print $NF}')" "$anime_name" "$next_cap" "$anime_caps" "$frontend"
 				;;
 				"MonosChinos2")
@@ -632,6 +633,7 @@ function anime_options(){
 			esac
 		;;
 		"download")
+			#Comando de descarga, puedes cambiarlo, $3 es el nombre del anime, $4 el numero de capitulo y $7 el link del capitulo
 			if type -p yt-dlp &>/dev/null; then
 				if [ "$7" == "0" ]; then
 					echo -e "${red}Este mirror no esta programado para descarga directa, ve a su pagina y descargalo -> $2${def}"
