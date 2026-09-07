@@ -10,17 +10,11 @@
 ---
 
 ### 🛠 Requisitos
-
-* **Networking:** `curl`
-* **Procesamiento:** `grep`, `seq`, `htmlq`, `perl`
-* **Interfaz:** `fzf`
-* **Reproductores:** `mpv`, `vlc` o `ffplay`
-
 ```bash
 #Debian, Ubuntu, Mint
-sudo apt install curl grep seq htmlq perl fzf mpv yt-dlp -y
+sudo apt install curl grep seq htmlq perl fzf mpv yt-dlp -y && pip install jsbeautifier
 #Arch Linux
-sudo pacman -Sy curl grep seq htmlq perl fzf mpv yt-dlp --no-confirm
+sudo pacman -Sy curl grep seq htmlq perl fzf mpv yt-dlp --no-confirm && pip install jsbeautifier
 ```
 ---
 ### 🚀 Instalación
